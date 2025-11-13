@@ -1,65 +1,158 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react';
+import { Box, Typography, Container, Button, Alert, CircularProgress } from "@mui/material";
+import StudentList from './components/StudentList';
+import AddStudentDialog from './components/AddStudentDialog';
+import { StudentAttendance } from '../types/student';
+import { convertDBStudentsToStudentAttendance, markPresent, getCurrentDateObjectVN } from '../utils/attendance';
+import { studentsApi } from '../lib/api';
 
 export default function Home() {
+  const [students, setStudents] = useState<StudentAttendance[]>([]);
+  const [currentDate, setCurrentDate] = useState<string>('');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [isClient, setIsClient] = useState<boolean>(false);
+
+  // Client-side hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Load dữ liệu từ database khi component mount
+  useEffect(() => {
+    loadStudents();
+    
+    // Set current date - chỉ khi đã hydrate
+    if (isClient) {
+      const vnDateObject = getCurrentDateObjectVN();
+      const formattedDate = vnDateObject.toLocaleDateString('vi-VN');
+      setCurrentDate(formattedDate);
+    }
+  }, [isClient]);
+
+  // Hàm load học sinh từ database
+  const loadStudents = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const dbStudents = await studentsApi.getAll();
+      const studentAttendance = convertDBStudentsToStudentAttendance(dbStudents);
+      setStudents(studentAttendance);
+    } catch (err) {
+      console.error('Error loading students:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xử lý khi nhấn nút "Học"
+  const handleMarkPresent = async (studentId: string) => {
+    try {
+      await markPresent(studentId);
+      // Reload students để cập nhật UI
+      await loadStudents();
+    } catch (err) {
+      console.error('Error marking student present:', err);
+      setError(err instanceof Error ? err.message : 'Failed to mark student present');
+    }
+  };
+
+  // Xử lý thêm học sinh mới
+  const handleAddStudent = async (name: string) => {
+    try {
+      await studentsApi.create(name);
+      await loadStudents(); // Reload để hiển thị học sinh mới
+      setIsAddDialogOpen(false);
+    } catch (err) {
+      console.error('Error adding student:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add student');
+    }
+  };
+
+  // Xử lý mở/đóng dialog
+  const handleOpenAddDialog = () => setIsAddDialogOpen(true);
+  const handleCloseAddDialog = () => setIsAddDialogOpen(false);
+
+  if (loading) {
+    return (
+      <Box sx={{ minHeight: 'calc(100vh - 64px)', backgroundColor: '#f5f5f5' }}>
+        <Container maxWidth="lg">
+          <Box sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+            <CircularProgress size={60} />
+          </Box>
+        </Container>
+      </Box>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <Box sx={{ minHeight: 'calc(100vh - 64px)', backgroundColor: '#f5f5f5' }}>
+      <Container maxWidth="lg">
+        <Box sx={{ py: 4 }}>
+          <Typography 
+            variant="h4" 
+            component="h1" 
+            gutterBottom 
+            sx={{ 
+              textAlign: 'center',
+              fontWeight: 'bold',
+              color: '#1976d2',
+              mb: 4
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            ĐIỂM DANH HỌC SINH
+          </Typography>
+          
+          <Typography 
+            variant="h6" 
+            component="h2" 
+            sx={{ 
+              textAlign: 'center',
+              color: '#666',
+              mb: 3
+            }}
           >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            {isClient ? `Ngày hôm nay: ${currentDate}` : 'Đang tải...'}
+          </Typography>
+
+          {error && (
+            <Alert 
+              severity="error" 
+              sx={{ mb: 3 }}
+              onClose={() => setError('')}
+            >
+              {error}
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleOpenAddDialog}
+              sx={{ px: 4, py: 1.5 }}
+            >
+              + Thêm Học Sinh
+            </Button>
+          </Box>
+
+          <StudentList 
+            students={students}
+            onMarkPresent={handleMarkPresent}
+          />
+
+          <AddStudentDialog
+            open={isAddDialogOpen}
+            onClose={handleCloseAddDialog}
+            onAddStudent={handleAddStudent}
+          />
+        </Box>
+      </Container>
+    </Box>
   );
 }
